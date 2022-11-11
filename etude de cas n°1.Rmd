@@ -1,0 +1,1330 @@
+---
+title: "Etude de cas 1"
+author: "François Lenne Lucas Leroy"
+date: "23/09/2021"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Librairies utilisées
+
+
+```{r include=FALSE}
+library(htmltools)
+library(readxl)
+library(readr)
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library(scales)
+library(lubridate)
+library(knitr)
+library(questionr)
+library(plotly)
+library(dash)
+library(dashCoreComponents)
+library(dashHtmlComponents)
+library(naniar)
+library(forecast)
+library(fpp2)
+library(zoo)
+library(skedastic)
+library(car)
+library(strucchange)
+library(orcutt)
+library(moments)
+library(rstatix)
+library(ggpubr)
+```
+
+
+
+
+# Partie 1 : Importation des données des données 
+
+
+```{r}
+
+df <- read_excel("C:/Users/franc/OneDrive/Bureau/M1/Etude de cas/Etude de cas N°1/1 trafic aÔÇÜrien international/trafic aÔÇÜrien international.xls")
+```
+
+```{r}
+summary(df)
+```
+
+# Partie 2 : Prétraitements appliqués aux types données
+
+## Recodage des variables
+
+Pour faciliter les manipulations que nous allons effectuer tout au long de l'étude, il est nécéssaire de renommer nos variables.
+
+
+```{r}
+colnames(df) <- c("Daten", "paris", "province", "indice")
+```
+
+
+### Passage du format POSIXCT au format pour la variable Date
+
+
+```{r}
+df = df %>%
+  mutate(Date=date(Daten)) %>%
+  select(Daten,Date,everything())
+```
+
+
+### Passage en numérique des variables paris/province/indice 
+
+
+```{r, results='hide'}
+as.numeric(df$paris)
+as.numeric(df$province)
+as.numeric(df$indice)
+```
+
+
+# Partie 3 : Gestion des valeurs manquantes et abberantes
+
+
+## Gestion des valeurs abberantes 
+
+
+### Détection des valeurs abbérantes avec la méthode des boxplots
+
+
+Nous allons détecter les valeurs abbérantes grâce à la méthode des boites a moustaches 
+
+```{r}
+BP_province = boxplot(df$paris,
+              main = "Boîte à moustache pour les vols internationaux de Paris",
+              ylab = "Nombre de vol",
+              col = "gray",
+              border = "black"
+              )
+```
+
+```{r}
+BP_province = boxplot(df$province,
+              main = "Boîte à moustache pour les vols internationaux de Province",
+              ylab = "Nombre de vol",
+              col = "gray",
+              border = "black"
+              )
+val_ab_province = BP_province$out
+
+```
+
+On observe 2 valeurs abberrantes sur la variable province afin d'éviter des retraitements et pour plus de significativité nous allons créer des variables dummy sur ces deux variables 
+## Gestion des valeurs manquantes 
+
+
+
+
+
+
+```{r}
+p3 = ggplot(data = df, aes(x = t, y = province)) + 
+  geom_line(color = "#1898A4", size = 1) +  
+  labs(x = "Observation", y= "Nombre de Vols" , title = "Valeurs Abberantes des vols internationaux des Aéroports de Province")+
+ theme_bw()+
+ theme(plot.title = element_text(size = 13L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+p3  + geom_vline(xintercept = 223, 
+                color = "blue", size=1) + geom_vline(xintercept = 235, 
+                color = "blue", size=1)
+```
+
+
+
+
+### Visualisation des valeurs manquantes
+
+
+```{r}
+
+MV = gg_miss_var(df)
+
+MV
+
+
+```
+
+Nous pouvons observer des valeurs manquantes sur la variable province et paris. Pour la variable indice comme ces valeurs sont situés au début de la série nous ne sommes pas obligés de les remplacés. 
+
+
+### Gestion des valeurs manquantes
+
+
+Pour ce faire, nous allons utiliser le package zoo qui permet de faire des interpollations linéaire afin de remplacer les valeurs manquantes 
+
+
+
+
+
+# Partie 4 : Statistiques descriptives
+
+
+## Trend Des vols internationaux des aéroports de Paris
+
+
+```{r}
+p = ggplot(data = df, aes(x = Date, y = paris)) + 
+  geom_line(color = "#1898A4", size = 1) +  
+  labs(x = "Date ", y= "Nombre de Vols" , title = "Evolution du nombre de vols internationaux de l'aéroport de Paris")+
+ theme_bw() +
+ theme(plot.title = element_text(size = 13L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+p + stat_smooth(
+  color = "#2D2F2C" , fill = "#0960FC",
+  method = "loess"
+  )
+
+
+```
+
+
+## Rupture de trend de Paris 
+
+
+```{r}
+p1 = ggplot(data = df, aes(x = t, y = paris)) + 
+  geom_line(color = "#1898A4", size = 1) +  
+  labs(x = "Observation", y= "Nombre de Vols" , title = "Analyse des ruptures de trend des vols internationaux de l'aéroport de Paris")+
+ theme_bw() +
+ theme(plot.title = element_text(size = 11L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+p1 + stat_smooth(
+  color = "#2D2F2C" , fill = "#0960FC",
+  method = "loess"
+  )  + geom_vline(xintercept = 39, 
+                color = "blue", size=1) + geom_vline(xintercept = 57, 
+                color = "blue", size=1) + geom_vline(xintercept = 126, 
+                color = "blue", size=1) + geom_vline(xintercept = 169, 
+                color = "blue", size=1) + geom_vline(xintercept = 200, 
+                color = "blue", size=1)
+
+```
+
+
+
+## Trend des vols internationaux des aéroports de Province
+
+
+```{r}
+p2 = ggplot(data = df, aes(x = Date, y = province)) + 
+  geom_line(color = "#1898A4", size = 1)+  
+  labs(x = "Date ", y= "Nombre de Vols" , title = "Evolution du nombre de vols internationaux des aéroports de Province")+
+ theme_bw() + theme(plot.title = element_text(size = 11L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+p2 + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  ) 
+
+```
+
+## Rupture de Trend Province 
+
+
+```{r}
+
+p3 = ggplot(data = df, aes(x = t, y = province)) + 
+  geom_line(color = "#1898A4", size = 1) +  
+  labs(x = "Observation", y= "Nombre de Vols" , title = "Analyse des ruptures de Trend des vols internationaux des Aéroports de Province")+
+ theme_bw()+
+ theme(plot.title = element_text(size = 13L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+p3 + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  ) + geom_vline(xintercept = 40, 
+                color = "blue", size=1) + geom_vline(xintercept = 85, 
+                color = "blue", size=1) + geom_vline(xintercept = 160, 
+                color = "blue", size=1)
+
+
+
+```
+
+
+Nous pouvons remarqué qu'il n'y a sur la variable Province aucun changement de régime.
+
+
+## Evolution de l'indice des prix
+
+
+```{r}
+
+pr <- ggplot(data = df, aes(x = Date, y = indice)) + 
+  geom_line(color = "#1898A4", size = 1) 
+
+
+
+pr
+
+
+```
+
+
+## Graphique bivarié province paris
+
+
+### préparation
+
+```{r}
+library(tidyr)
+library(dplyr)
+df_graph <- df %>%
+  select(Date, paris, province) %>%
+  gather(key = "variable", value = "value", -Date)
+head(df, 3)
+```
+
+
+### Premier graphique
+
+
+```{r}
+ggplot(df_graph, aes(x = Date, y = value)) + 
+  geom_area(aes(color = variable, fill = variable), 
+            alpha = 0.5, position = position_dodge(0.8)) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800"))
+
+
+```
+
+
+Nous pouvons remarquer qu'il y a plus de vols internationaux dans les aéroports de Paris que dans les aéroports de province.
+
+
+### Deuxiéme Graphique  
+
+
+```{r}
+ronan = ggplot(df_graph, aes(x = Date, y = value)) + 
+  geom_line(aes(color = variable), size = 1) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) +
+  theme_minimal()
+
+
+ronan
+```
+
+
+# Detection des mouvements saisonnier
+
+## des vols des aéroports de Paris
+
+
+```{r}
+monthplot(tsparis, xlab ="Par mois", ylab = " nombre de vol internationaux", main = " Saisonnalité des vols intertionaux de l'aéroport de Paris", cex.main = 1.2, col = "blue")
+```
+
+Nous pouvons constater qu'il y'a un mouvement intra-annuels. En effet, le nombre de vols internationaux à Paris dépend du mois de l'année.
+
+
+
+
+
+## des vols des aéroports de province
+
+
+```{r}
+monthplot(tsprovince, xlab ="Par mois", ylab = " nombre de vol internationaux", main = " Saisonnalité des vols internationaux des aéroports de province", cex.main = 1.2, col = "red")
+
+```
+
+
+Nous pouvons constater qu'il y'a un mouvement intra-annuels. En effet, le nombre de vols internationaux des aéroports de province dépend du mois. Néanmoins, nous pouvons remarquer que certains mois ont en moyenne le même nombre de vols. On peut prendre pour exemple les mois de Novembre, Décembre, Janvier, Fêvrier.
+
+
+
+# A t'il eu un changement d'effet de saisonnalité dans le temps ?
+
+
+
+## Province 
+
+
+### effet de saisonnalité de 1988 à 1993
+
+
+```{r}
+tsprovincex = ts(data = df$province, start = c(1988,1), end = c(2001,1), frequency = 12,  deltat = 1, names = )
+```
+
+
+
+```{r}
+monthplot(tsprovincex, xlab ="Par mois", ylab = " nombre de vol internationaux", main = " Saisonnalité des vols internationaux des aéroports de province de 1988 à 2001", cex.main = 1.05, col = "blue")
+```
+
+
+### effet de saisonnalité de 1993 à 2007
+
+
+```{r}
+tsprovincez = ts(data = df$province, start = c(2001,1), end = c(2007,1), frequency = 12,  deltat = 1, names = )
+```
+
+
+
+```{r}
+monthplot(tsprovincez, xlab ="Par mois", ylab = " nombre de vol internationaux", main = " Saisonnalité des vols internationaux des aéroports de province de 2001 à 2007", cex.main = 1.05, col = "blue")
+```
+
+
+
+
+## Paris
+
+
+### effet de saisonnalité de 1988 à 1993
+
+```{r}
+
+tsparisx = ts(data = df$paris, start = c(1988,1), end = c(2001,1), frequency = 12,  deltat = 1, names = )
+
+
+```
+
+
+
+
+```{r}
+
+monthplot(tsparisx, xlab ="Par mois", ylab = " nombre de vol internationaux", main = " Saisonnalité des vols internationaux de l'aéroport de Paris de 1988 à 2001", cex.main = 1.05, col = "red")
+
+
+
+```
+
+
+### effet de saisonnalité de 1993 à 2007
+
+```{r}
+
+tsparisz = ts(data = df$paris, start = c(2001,1), end = c(2007,1), frequency = 12,  deltat = 1, names = )
+
+
+```
+
+
+
+
+```{r}
+
+monthplot(tsparisz, xlab ="Par mois", ylab = " nombre de vol internationaux", main = "Saisonnalité des vols intertionaux de l'aéroport de Paris de 2001 à 2007", cex.main = 1.05, col = "red")
+
+
+
+```
+
+
+
+
+## indice
+
+
+
+```{r}
+tsindice = ts(data = df$indice, start = c(1992,1), end = c(2007,1), frequency = 12,  deltat = 1, names = )
+```
+
+
+```{r}
+
+monthplot(tsparisz, xlab ="Par mois", ylab = "Indice des prix", main = "Saisonnalité de l'indice des prix de 1992 à 2007", cex.main = 1.05, col = "black")
+
+
+
+```
+
+
+# Partie 5 : Lancement de la Modélisation 
+
+
+## création des variables times series + graphique
+
+
+
+### Paris
+
+
+```{r}
+
+tsparis = ts(data = df$paris, start = c(1988,1), end = c(2007,6), frequency = 12,  deltat = 1, names = )
+
+
+```
+
+
+les changements de régimes :
+
+-juin 1998 grêve massive chez air france 
+
+
+-Septembre 2001 : attentat du 11/09 impossibilité d'aller aux Etats-Unis
+
+
+possible changmement de régime :
+
+-juin 2003 -> accident d'avion air france ou grêve de fonction publique  
+
+
+```{r}
+tsprovince = ts(data = df$province, start = c(1988,1), end = c(2007,6), frequency = 12,  deltat = 1, names = )
+
+```
+
+Changement de régime :
+
+- septembre 2001 -> attentat
+
+- janvier 2005 
+
+
+- 2006 (https://www.challenges.fr/entreprise/le-trafic-aerien-mondial-de-passagers-atteint-un-record-en-2006_385044)
+
+
+
+
+
+## Variable retardé 
+
+### Paris
+
+
+
+```{r}
+
+lag.plot(rev(tsparis),12,layout = c(4,3), do.lines = FALSE, diag.col = "red", col.main = "blue")
+
+```
+
+
+
+
+
+
+### Province
+
+
+
+
+
+```{r}
+lag.plot(rev(tsprovince),12,layout = c(4,3), do.lines = FALSE, diag.col = "red", col.main = "blue")
+```
+
+
+## Création des variable dummy mensuel 
+
+
+
+```{r}
+df$datec = df$Date
+
+
+as.character.Date(df$datec)
+
+df$mois = substr(df$datec,6,7)
+
+df$mois = as.numeric(df$mois)
+
+
+
+```
+
+
+```{r}
+
+df$M1 = ifelse(df$mois == 1 ,1,0)
+df$M2 = ifelse(df$mois == 2 ,1,0)
+df$M3 = ifelse(df$mois == 1:3 ,1,0)
+df$M4 = ifelse(df$mois == 4 ,1,0)
+df$M5 = ifelse(df$mois == 5 ,1,0)
+df$M6 = ifelse(df$mois == 6 ,1,0)
+df$M7 = ifelse(df$mois == 7 ,1,0)
+df$M8 = ifelse(df$mois == 8 ,1,0)
+df$M9 = ifelse(df$mois == 9 ,1,0)
+df$M10 = ifelse(df$mois == 10 ,1,0)
+df$M11 = ifelse(df$mois == 11 ,1,0)
+df$M12 = ifelse(df$mois == 12 ,1,0)
+ 
+```
+
+
+```{r}
+df$moisq = ifelse(df$mois == 4:6 ,1,0)
+df$moisq2 = ifelse(df$mois == 7:8 ,1,0)
+df$moisq3 = ifelse(df$mois == 1:2 ,1,0)
+df$moisq4 = ifelse(df$mois == 5:6 ,1,0)
+
+```
+
+
+
+## Création de la variable observation 
+
+
+
+
+```{r}
+
+df$t <- 1:236
+
+
+
+
+```
+
+## suppression des NA de la variable indice
+
+```{r}
+
+
+dfreg = df
+
+dfreg <- mutate_at(dfreg, c("indice"), ~replace(., is.na(.), 0))
+
+
+```
+
+
+## Avons nous un modéle additif ou multiplicatif 
+
+```{r}
+ADMU <- read_excel("C:/Users/franc/OneDrive/Bureau/M1/Etude de cas/Etude de cas N°1/1 trafic aÔÇÜrien international/Modélisation.xlsx")
+```
+
+
+
+
+### Paris
+
+
+```{r}
+z = ggplot() +
+ aes(x = ADMU$`Moyenne Paris`, y = ADMU$`ecart type paris` ) +
+ geom_point(shape = "circle", size = 1.5, colour = "#839DCB") +
+ labs(x = "moyenne ", y = "ecart type", title = "Choix du modéle pour l'aéroport de Paris") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+
+
+z + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  )
+```
+
+
+
+### Province 
+
+
+```{r}
+z = ggplot() +
+ aes(x = ADMU$`Moyenne Province`, y = ADMU$`ecart type province` ) +
+ geom_point(shape = "circle", size = 1.5, colour = "#839DCB") +
+ labs(x = "moyenne ", y = "ecart-type", title = "Choix du modéle pour les aéroports de Province") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+
+
+z + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  )
+
+
+```
+
+
+
+
+
+
+```{r}
+dfreg$provincel = log(dfreg$province)
+```
+
+
+
+
+# Premiére régression 
+
+
+
+```{r}
+write.csv2(dfreg, 'c1.csv')
+```
+
+
+```{r}
+dfreg2 = read_delim("C:/Users/franc/OneDrive/Bureau/M1/Etude de cas/Etude de cas N°1/1 trafic aÔÇÜrien international/c1.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+```
+
+
+
+
+## Régression Paris 
+
+
+
+```{r}
+Regparis = lm(dfreg$paris~ dfreg$indice + dfreg$M3 + df$moisq + df$moisq2 + dfreg$M9 + dfreg$M10  + dfreg$t)
+
+summary(Regparis)
+
+
+
+```
+
+
+
+## Régression Province 
+
+
+```{r}
+
+Regprovince = lm(dfreg$provincel~ dfreg$indice + dfreg$M2 + dfreg$M3 + dfreg$M4 + dfreg$M5 + dfreg$M6 + dfreg$M7 + dfreg$M8 + dfreg$M9 + dfreg$M10+ dfreg$M11 + dfreg$M12 + dfreg$t)
+
+summary(Regprovince)
+
+```
+
+```{r}
+summary(df$M10)
+```
+
+
+# Changement de régime 
+
+
+## Paris 
+
+
+### graphique du résidu paris 
+
+
+```{r}
+
+
+xobs = c(1:235)
+
+ResiduReg1 = Regparis$residuals
+
+
+```
+
+
+
+
+
+```{r}
+z = ggplot() +
+ aes(x = xobs, y = ResiduReg1 ) +
+ geom_point(shape = "circle", size = 1.5, colour = "#839DCB") +
+ labs(x = "résidu ", title = "Graphique résidu Paris") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+
+
+z + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  )
+```
+
+
+
+
+### test de chow (changement de régime)
+
+
+## Pour l'observation 175
+
+```{r}
+
+
+sctest(dfreg$paris ~ dfreg$t, type = "Chow", point = 33)
+
+```
+
+
+
+## Pour l'observation 200
+
+
+```{r}
+
+sctest(dfreg$paris ~ dfreg$t, type = "Chow", point = 200)
+
+```
+
+
+
+## Province 
+
+
+graphique du résidu province
+
+
+
+```{r}
+ResiduReg2 = Regprovince$residuals
+
+yobs = c(1:234)
+```
+
+
+
+
+```{r}
+w = ggplot() +
+ aes(x = yobs, y = ResiduReg2 ) +
+ geom_point(shape = "circle", size = 1.5, colour = "#839DCB") +
+ labs(x = "résidu ", title = "Graphique résidu province") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+
+
+w + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  )
+```
+
+
+
+
+# Les test de nos regression (50)
+
+## chagement de régime
+
+```{r}
+
+
+sctest(dfreg$province ~ dfreg$t, type = "Chow", point = 231)
+
+```
+
+### changement de régime (100)
+
+```{r}
+
+
+sctest(dfreg$province ~ dfreg$t, type = "Chow", point = 100)
+
+
+
+```
+
+
+
+### changement de régime (150)
+
+```{r}
+
+
+sctest(dfreg$province ~ dfreg$t, type = "Chow", point = 39)
+
+
+```
+
+
+
+# deuxiéme régression (avec les changements de régimes)
+
+
+
+
+## Paris 
+
+
+
+### création des variables du changement de régime 
+
+
+```{r}
+
+dfreg$p1pa = ifelse(dfreg$t < 39 ,1,0)
+dfreg$p2pa = ifelse(between(dfreg$t,40,57),1,0)
+dfreg$p3pa = ifelse(between(dfreg$t,58,126),1,0)
+dfreg$p4pa = ifelse(between(dfreg$t,127,169),1,0)
+dfreg$p5pa = ifelse(between(dfreg$t,170,200),1,0)
+
+dfreg$p1pat = dfreg$p1pa * dfreg$t
+dfreg$p2pat = dfreg$p2pa * dfreg$t
+dfreg$p3pat = dfreg$p3pa * dfreg$t
+dfreg$p4pat = dfreg$p4pa * dfreg$t
+dfreg$p5pat = dfreg$p5pa * dfreg$t
+
+```
+
+
+
+
+
+
+
+
+### deuxiéme régression 
+
+```{r}
+dfreg$lnparis = log(dfreg$paris)
+```
+
+
+```{r}
+
+Regparis2 = lm(dfreg$lnparis~ dfreg$indice  + df$M2 + dfreg$M3 + df$moisq + df$moisq2 + dfreg$M9 + dfreg$M10  + dfreg$t + dfreg$p1pa + dfreg$p2pa + dfreg$p3pa + dfreg$p4pa + dfreg$p5pa + dfreg$p1pat +  dfreg$p2pat + dfreg$p3pat + dfreg$p4pat + dfreg$p5pat )
+summary(Regparis2)
+
+
+
+```
+```{r}
+xxxx$Residuparis3 = Regparis2$residuals
+
+xobs3 = 1:235
+
+xxxx = as.data.frame(xobs3)
+
+
+```
+
+
+## Test de la distribution normal du terme d'erreur PAris 
+
+
+```{r}
+
+ggplot(xxxx, aes(x=Residuparis3))+
+  geom_density(color="#0960FC", fill="lightblue") +
+ labs(x = "résidu ",y = "Part du résidu" , title = "Distribution du terme d'erreur Paris") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+```
+
+
+
+
+
+```{r}
+ agostino = agostino.test(Residuparis3)
+
+agostino
+```
+
+
+
+
+## Test de la distribution normal du terme d'erreur Province
+
+
+
+```{r}
+
+yy = 1:234
+
+yyy = as.data.frame(yy)
+
+is.data.frame(yyy)
+
+
+summary(yyy)
+
+
+
+yyy$residu = ResiduReg3
+```
+
+
+
+```{r}
+
+ggplot(yyy, aes(x=residu))+
+  geom_density(color="#0960FC", fill="lightblue") +
+ labs(x = "résidu ",y = "Part du résidu" , title = "Distribution du terme d'erreur Province") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+```
+
+
+
+```{r}
+ agostino2 = agostino.test(ResiduReg3)
+
+agostino2
+```
+
+
+### graphique du residu du terme d'erreur 
+
+```{r}
+JF = ggplot() +
+ aes(x = yobs3, y = ResiduReg3 ) +
+ geom_point(shape = "circle", size = 1.5, colour = "#839DCB") +
+ labs(x = "observation ",y = "Residu", title = "Graphique résidu paris") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+
+
+JF + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  )
+
+
+
+```
+
+
+# Province 
+
+## Création des variables de changements de régimes 
+
+
+
+```{r}
+dfreg$p1pr = ifelse(dfreg$t < 40,1,0)
+dfreg$p2pr = ifelse(between(dfreg$t,41,84),1,0)
+dfreg$p3pr = ifelse(between(dfreg$t,85,159),1,0)
+dfreg$p4pr = ifelse(between(dfreg$t,160,168),1,0)
+
+## création des dummy de valeurs abberantes 
+
+dfreg$valab1 = ifelse(dfreg$t == 223 ,1,0)
+dfreg$valab2 = ifelse(dfreg$t == 234 ,1,0)
+
+#Comme nous sommes sur un modéle multiplicatif nous allons devoir multiplié nos variables de changement de régimes par notre variable d'observation 
+
+dfreg$p1prt = dfreg$p1pr * dfreg$t
+dfreg$p2prt = dfreg$p2pr * dfreg$t
+dfreg$p3prt = dfreg$p3pr * dfreg$t
+dfreg$p4prt = dfreg$p4pr * dfreg$t
+
+```
+
+
+## deuxiéme régression 
+
+```{r}
+dfreg$provincel = log(dfreg$province)
+```
+
+```{r}
+
+Regprovince2 = lm(dfreg$provincel~ dfreg$indice + df$moisq3 + dfreg$M3 + dfreg$M4 + df$moisq4 + dfreg$M7 + dfreg$M8 + dfreg$M9 + dfreg$M10 + dfreg$t + dfreg$p1pr + dfreg$p2pr + dfreg$p3pr + dfreg$p1prt + dfreg$p2prt + dfreg$p3prt  + dfreg$valab1 +dfreg$valab2   )
+
+summary(Regprovince2)
+
+```
+
+
+
+```{r}
+ResiduReg3 = Regprovince2$residuals
+
+yobs3 = c(1:length(ResiduReg3))
+```
+
+
+
+
+```{r}
+JF = ggplot() +
+ aes(x = yobs3, y = ResiduReg3 ) +
+ geom_point(shape = "circle", size = 1.5, colour = "#839DCB") +
+ labs(x = "résidu ", title = "Graphique résidu province") +
+ theme_bw() +
+ theme(plot.title = element_text(size = 15L, face = "bold", hjust = 0.5), axis.title.y = element_text(size = 12L), 
+ axis.title.x = element_text(size = 12L))
+
+
+
+JF + stat_smooth(
+  color = "#2D2F2C", fill = "#0960FC",
+  method = "loess"
+  )
+
+
+
+```
+
+
+
+
+
+
+
+## Hétéorscédasticité 
+
+### Paris 
+
+
+```{r}
+
+ x= glejser(Regparis2)
+
+summary(x)
+
+
+
+```
+
+
+
+
+### Province 
+
+
+```{r}
+
+
+y= glejser(Regprovince2)
+
+summary(y)
+
+
+
+```
+
+
+
+## Autocorrélation des erreurs 
+
+
+### Test de Durbin et watson pour paris 
+
+
+```{r}
+
+durbinWatsonTest(Regparis2)
+
+```
+
+
+### Test de Durbin et watson pour paris 
+
+```{r}
+
+durbinWatsonTest(Regprovince2) 
+
+```
+
+## Espérence du terme d'erreur 
+
+
+
+### Paris 
+
+```{r}
+mean(Regparis2$residuals)
+
+```
+
+
+
+
+
+
+### Province 
+
+
+```{r}
+
+
+mean(Regprovince2$residuals)
+
+```
+
+
+
+
+
+
+## Variance du terme d'erreur 
+
+
+### Variance de la régression pour Paris
+
+```{r}
+
+
+var(Regparis2$residuals)
+
+```
+
+
+
+
+### variance de la régression pour Province
+
+```{r}
+
+var(Regprovince2$residuals)
+
+```
+
+
+
+## Guauss-Markov 
+
+### Paris 
+
+```{r}
+
+
+residua3 = sum(Regparis2$residuals)
+residu3 = residua3*residua3
+GM3 = (residu3)/(222*(1-0.9685))
+
+GM3
+
+```
+
+
+
+
+### Province 
+
+
+```{r}
+
+
+residua4 = sum(Regprovince2$residuals)
+residu4 = residua4*residua4
+GM4 = (residu4)/(216*(1-0.9747))
+
+GM4
+
+```
+
+## Cochrane-orcutt
+
+
+### Paris
+
+```{r}
+
+Regparis3 = cochrane.orcutt(Regparis2, convergence = 8, max.iter = 100)
+
+Regparis3
+
+```
+
+
+
+
+
+### Province 
+
+
+```{r}
+
+
+Regprovince3 = cochrane.orcutt(Regprovince2, convergence = 8, max.iter=100)
+
+
+
+Regprovince3
+
+```
+
+
+
+```{r}
+summary(Regprovince5)
+```
+
+
+
+
+# Prediction (Predicted)
+
+
+## Paris 
+
+```{r}
+prediction_paris = predict(Regparis3,interval= "confidence")
+
+prediction_paris2 = exp(prediction_paris)
+
+prediction_paris2
+
+
+```
+
+
+
+
+```{r}
+summary(Regparis3)
+
+mean(Regparis3$residuals)
+var(Regparis3$residuals)
+```
+
+
+
+## Province
+
+
+```{r}
+prediction = predict(Regprovince3)
+
+
+prediction2 = exp(prediction)
+
+prediction2
+```
+
+
+
+
+```{r}
+write.csv2(dfreg, 'dfreg2.csv')
+
+write.csv2(df, 'mois.csv')
+```
+
+
+
+
+
